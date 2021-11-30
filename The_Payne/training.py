@@ -323,4 +323,6 @@ def neural_net(training_labels, training_spectra, validation_labels, validation_
              training_loss = training_loss,\
              validation_loss = validation_loss)
 
+    print('Saving results to ',modelfile,' and ',lossfile)
+    
     return
