@@ -112,8 +112,8 @@ class Payne_model(torch.nn.Module):
 #===================================================================================================
 # train neural networks
 def neural_net(training_labels, training_spectra, validation_labels, validation_spectra,\
-             num_neurons = 300, num_steps=1e4, learning_rate=1e-4, batch_size=512,\
-             num_features = 64*5, mask_size=11, num_pixel=7214):
+               num_neurons = 300, num_steps=1e4, learning_rate=1e-4, batch_size=512,\
+               num_features = 64*5, mask_size=11, num_pixel=7214, cuda=True, name=None):
 
     '''
     Training a neural net to emulate spectral models
@@ -154,10 +154,22 @@ def neural_net(training_labels, training_spectra, validation_labels, validation_
 
     '''
 
+    # Output names
+    if name is None:
+        modelfile = "NN_normalized_spectra.npz"
+        lossfile = "trained_loss.npz"
+    else:
+        modelfile = "NN_normalized_spectra_"+str(name)+".npz"
+        lossfile = "trained_loss_"+str(name)+".npz"
+        
     # run on cuda
-    dtype = torch.cuda.FloatTensor
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
-
+    if cuda:
+        dtype = torch.cuda.FloatTensor
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    else:
+        dtype = torch.FloatTensor
+        torch.set_default_tensor_type('torch.FloatTensor')   
+    
     # scale the labels, optimizing neural networks is easier if the labels are more normalized
     x_max = np.max(training_labels, axis = 0)
     x_min = np.min(training_labels, axis = 0)
@@ -179,7 +191,8 @@ def neural_net(training_labels, training_spectra, validation_labels, validation_
 
     # initiate Payne and optimizer
     model = Payne_model(dim_in, num_neurons, num_features, mask_size, num_pixel)
-    model.cuda()
+    if cuda:
+        model.cuda()
     model.train()
 
     # we adopt rectified Adam for the optimization
@@ -204,7 +217,8 @@ def neural_net(training_labels, training_spectra, validation_labels, validation_
 
         # randomly permute the data
         perm = torch.randperm(nsamples)
-        perm = perm.cuda()
+        if cuda:
+            perm = perm.cuda()
 
         # for each batch, calculate the gradient with respect to the loss
         for i in range(nbatches):
@@ -224,7 +238,8 @@ def neural_net(training_labels, training_spectra, validation_labels, validation_
             # evaluating the whole validation set could go beyond the GPU memory
             # if needed, this part can be simplified to reduce overhead
             perm_valid = torch.randperm(nsamples_valid)
-            perm_valid = perm_valid.cuda()
+            if cuda:
+                perm_valid = perm_valid.cuda()
             loss_valid = 0
 
             for j in range(nbatches_valid):
@@ -258,18 +273,23 @@ def neural_net(training_labels, training_spectra, validation_labels, validation_
                 b_array_2 = model_numpy[5]
 
                 # save parameters and remember how we scaled the labels
-                np.savez("NN_normalized_spectra.npz",\
-                        w_array_0 = w_array_0,\
-                        w_array_1 = w_array_1,\
-                        w_array_2 = w_array_2,\
-                        b_array_0 = b_array_0,\
-                        b_array_1 = b_array_1,\
-                        b_array_2 = b_array_2,\
-                        x_max=x_max,\
-                        x_min=x_min,)
+                np.savez(modelfile,\
+                         w_array_0 = w_array_0,\
+                         w_array_1 = w_array_1,\
+                         w_array_2 = w_array_2,\
+                         b_array_0 = b_array_0,\
+                         b_array_1 = b_array_1,\
+                         b_array_2 = b_array_2,\
+                         x_max=x_max,\
+                         x_min=x_min,\
+                         learning_rate=learning_rate,\
+                         num_neurons=num_neurons,\
+                         num_steps=num_steps,\
+                         batch_size=batch_size,\
+                         labels=training_labels)
 
                 # save the training loss
-                np.savez("training_loss.npz",\
+                np.savez(lossfile,\
                          training_loss = training_loss,\
                          validation_loss = validation_loss)
 
@@ -283,7 +303,7 @@ def neural_net(training_labels, training_spectra, validation_labels, validation_
     b_array_2 = model_numpy[5]
 
     # save parameters and remember how we scaled the labels
-    np.savez("NN_normalized_spectra.npz",\
+    np.savez(modelfile,\
              w_array_0 = w_array_0,\
              w_array_1 = w_array_1,\
              w_array_2 = w_array_2,\
@@ -291,10 +311,15 @@ def neural_net(training_labels, training_spectra, validation_labels, validation_
              b_array_1 = b_array_1,\
              b_array_2 = b_array_2,\
              x_max=x_max,\
-             x_min=x_min,)
+             x_min=x_min,\
+             learning_rate=learning_rate,\
+             num_neurons=num_neurons,\
+             num_steps=num_steps,\
+             batch_size=batch_size,\
+             labels=training_labels)             
 
     # save the final training loss
-    np.savez("training_loss.npz",\
+    np.savez(lossfile,\
              training_loss = training_loss,\
              validation_loss = validation_loss)
 
